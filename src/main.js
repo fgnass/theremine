@@ -18,7 +18,6 @@ app.innerHTML = `
         <div class="preview" data-role="preview">
           <div class="preview__video-wrapper">
             <video class="preview__video" playsinline muted autoplay></video>
-            <canvas class="preview__debug" data-role="debug"></canvas>
             <div class="preview__pointer" data-role="pointer"></div>
             <div class="preview__overlay">
               <div class="preview__status" data-role="status">Tap Start Capture to activate the camera.</div>
@@ -168,7 +167,6 @@ app.innerHTML = `
         <div class="preview calibration__preview" data-role="preview">
           <div class="preview__video-wrapper">
             <video class="preview__video" playsinline muted autoplay></video>
-            <canvas class="preview__debug" data-role="debug"></canvas>
             <div class="preview__pointer" data-role="pointer"></div>
           </div>
         </div>
@@ -188,8 +186,6 @@ const startButton = app.querySelector('[data-action="start"]')
 const calibrateButton = app.querySelector('[data-action="calibrate"]')
 const calibrationPanel = app.querySelector('[data-role="calibration-panel"]')
 const closeCalibrationButton = app.querySelector('[data-action="close-calibration"]')
-const debugCanvas = app.querySelector('[data-role="debug"]')
-const debugCtx = debugCanvas.getContext('2d')
 const readout = {
   pitch: app.querySelector('[data-field="pitch"]'),
   note: app.querySelector('[data-field="note"]'),
@@ -230,6 +226,7 @@ let gestureRecognizer
 let running = false
 let lastFrameTime = -1
 let calibrationPanelOpen = false
+let frameCounter = 0
 const state = {
   areaRange: { min: 0.04, max: 0.24 },
   depthRange: { min: Infinity, max: -Infinity },
@@ -275,15 +272,7 @@ const state = {
 const NATURAL_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11])
 const FIST_THRESHOLD = 0.09
 const MIN_CALIBRATION_SPAN = 0.004
-const HAND_CONNECTIONS = [
-  [0, 1], [1, 2], [2, 3], [3, 4],
-  [0, 5], [5, 6], [6, 7], [7, 8],
-  [5, 9], [9, 10], [10, 11], [11, 12],
-  [9, 13], [13, 14], [14, 15], [15, 16],
-  [13, 17], [17, 18], [18, 19], [19, 20],
-  [0, 17]
-]
-
+const FRAME_SKIP = 1
 let lastGestureCategories = []
 let visionFilesetPromise
 let lastGestureTimestamp = 0
@@ -342,8 +331,9 @@ async function handleStart() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 640, max: 960 },
+        height: { ideal: 360, max: 540 },
+        frameRate: { ideal: 30, max: 30 },
       },
       audio: false,
     })
@@ -353,7 +343,6 @@ async function handleStart() {
     videoEl.addEventListener('loadedmetadata', () => {
       // Mirror the feed for a selfie-style experience.
       videoEl.style.transform = 'scaleX(-1)'
-      syncDebugCanvas()
     }, { once: true })
 
     app.querySelectorAll('.preview__video').forEach(video => {
@@ -531,6 +520,7 @@ async function loadVisionFileset() {
 
 function processFrame(now) {
   if (!running || !handLandmarker) {
+    requestAnimationFrame(processFrame)
     return
   }
 
@@ -546,17 +536,17 @@ function processFrame(now) {
 
   lastFrameTime = now
 
+  frameCounter = (frameCounter + 1) % (FRAME_SKIP + 1)
+  if (frameCounter !== 0) {
+    requestAnimationFrame(processFrame)
+    return
+  }
+
   const results = handLandmarker.detectForVideo(videoEl, now)
   if (results.landmarks?.length) {
     handleHand(results.landmarks[0], now)
   } else {
-    synth?.setActive(false)
-    pointerEl.style.opacity = '0'
-    updateReadout({ pitch: '--', distance: '--', note: '--', volume: '--', filter: '--', vibrato: '--', mute: '--' })
-    updateInputReadout()
-    updateScaleIndicator(0, '--')
-    lastGestureCategories = []
-    clearDebugOverlay()
+    handleNoHand()
   }
 
   requestAnimationFrame(processFrame)
@@ -613,18 +603,6 @@ function handleHand(landmarks, timestamp) {
   })
 
   updatePointer(displayX, centerY, areaNormalized)
-  drawDebugOverlay(landmarks, {
-    areaNormalized,
-    depth,
-    depthNormalized,
-    distanceNormalized,
-    pinch: metrics.pinch,
-    curl: metrics.curl,
-    isFist: isFist(spread) || hasGestureFist(lastGestureCategories),
-    calibrationActive: state.calibration.active,
-    calibrationCaptures: state.calibration.captures,
-    gestureCategories: lastGestureCategories,
-  })
 
   const outputs = applyMappings(metrics)
 
@@ -644,6 +622,15 @@ function handleHand(landmarks, timestamp) {
 
   const scalePosition = normalize(outputs.frequency, state.synthParams.pitchMin, state.synthParams.pitchMax)
   updateScaleIndicator(clamp(scalePosition, 0, 1), outputs.noteName)
+}
+
+function handleNoHand() {
+  synth?.setActive(false)
+  pointerEl.style.opacity = '0'
+  updateReadout({ pitch: '--', distance: '--', note: '--', volume: '--', filter: '--', vibrato: '--', mute: '--' })
+  updateInputReadout()
+  updateScaleIndicator(0, '--')
+  lastGestureCategories = []
 }
 
 function updatePointer(x, y, distance) {
@@ -1122,89 +1109,6 @@ function formatDistance(normalized) {
   const clamped = clamp(normalized, 0, 1)
   const cm = lerp(60, 8, clamped)
   return `${cm.toFixed(0)} cm (est)`
-}
-
-function drawDebugOverlay(landmarks, { areaNormalized, depth, depthNormalized, distanceNormalized = 0, pinch = 0, curl = 0, isFist, calibrationActive, calibrationCaptures, gestureCategories }) {
-  if (!debugCanvas || !debugCtx) return
-  syncDebugCanvas()
-  const width = debugCanvas.width
-  const height = debugCanvas.height
-  debugCtx.clearRect(0, 0, width, height)
-
-  if (!landmarks) return
-
-  debugCtx.save()
-  debugCtx.translate(width, 0)
-  debugCtx.scale(-1, 1)
-  debugCtx.lineWidth = 2
-  debugCtx.strokeStyle = 'rgba(24, 210, 255, 0.8)'
-  debugCtx.fillStyle = 'rgba(109, 72, 255, 0.9)'
-
-  const px = index => ({
-    x: landmarks[index].x * width,
-    y: landmarks[index].y * height,
-  })
-
-  debugCtx.beginPath()
-  for (const [start, end] of HAND_CONNECTIONS) {
-    const a = px(start)
-    const b = px(end)
-    debugCtx.moveTo(a.x, a.y)
-    debugCtx.lineTo(b.x, b.y)
-  }
-  debugCtx.stroke()
-
-  for (let i = 0; i < landmarks.length; i++) {
-    const { x, y } = px(i)
-    debugCtx.beginPath()
-    debugCtx.arc(x, y, i === 8 ? 5 : 3, 0, Math.PI * 2)
-    debugCtx.fill()
-  }
-  debugCtx.restore()
-
-  const wrist = landmarks?.[0]
-  const lines = [
-    `depth: ${depth.toFixed(3)}`,
-    `depth norm: ${(depthNormalized * 100).toFixed(1)}%`,
-    `distance norm: ${(distanceNormalized * 100).toFixed(1)}%`,
-    `pinch: ${(pinch * 100).toFixed(1)}%`,
-    `curl: ${(curl * 100).toFixed(1)}% ${isFist ? '(fist)' : ''}`,
-    `area norm: ${(areaNormalized * 100).toFixed(1)}%`,
-    `wrist uv: ${wrist ? `${wrist.x.toFixed(3)} ${wrist.y.toFixed(3)}` : '-- --'}`,
-  ]
-  if (calibrationActive) {
-    lines.push(`calibration captures: ${calibrationCaptures}`)
-  }
-  const gestureLine = formatGestureCategories(gestureCategories)
-  if (gestureLine) {
-    lines.push(`gestures: ${gestureLine}`)
-  }
-
-  debugCtx.save()
-  debugCtx.fillStyle = 'rgba(0, 0, 0, 0.55)'
-  debugCtx.fillRect(12, 12, 230, 18 * lines.length + 12)
-  debugCtx.fillStyle = '#f4f7ff'
-  debugCtx.font = '12px "Menlo", "SFMono-Regular", monospace'
-  for (let i = 0; i < lines.length; i++) {
-    debugCtx.fillText(lines[i], 20, 30 + i * 16)
-  }
-  debugCtx.restore()
-}
-
-function clearDebugOverlay() {
-  if (!debugCanvas || !debugCtx) return
-  debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
-}
-
-function syncDebugCanvas() {
-  if (!debugCanvas || !videoEl) return
-  const videoWidth = videoEl.videoWidth
-  const videoHeight = videoEl.videoHeight
-  if (!videoWidth || !videoHeight) return
-  if (debugCanvas.width !== videoWidth || debugCanvas.height !== videoHeight) {
-    debugCanvas.width = videoWidth
-    debugCanvas.height = videoHeight
-  }
 }
 
 function hasGestureFist(categories) {
