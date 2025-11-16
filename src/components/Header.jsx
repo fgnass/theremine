@@ -1,0 +1,26 @@
+import { isRunning, settingsOpen } from "../state/appState";
+
+export function Header() {
+  return (
+    <header class="theremin__header">
+      <div class="theremin__branding">
+        <img src="/logo.svg" alt="Theremine logo" class="theremin__logo" />
+        <p class="theremin__tagline">A theremin in your pocket</p>
+      </div>
+      {isRunning.value && (
+        <button
+          class="settings-button"
+          type="button"
+          onClick={() => (settingsOpen.value = true)}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 17H5"/>
+            <path d="M19 7h-9"/>
+            <circle cx="17" cy="17" r="3"/>
+            <circle cx="7" cy="7" r="3"/>
+          </svg>
+        </button>
+      )}
+    </header>
+  );
+}

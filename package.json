@@ -13,6 +13,8 @@
     "vite": "^7.1.7"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "^0.10.12"
+    "@mediapipe/tasks-vision": "^0.10.12",
+    "@preact/signals": "^2.3.2",
+    "preact": "^10.27.2"
   }
 }
