@@ -25,6 +25,18 @@ export function App() {
   const engineRef = useRef(null);
   const wakeLockRef = useRef(null);
 
+  // Screenshot mode: render the running UI (and optionally the settings modal)
+  // without starting the camera, for the portfolio screenshot script.
+  // `?screenshot` → main play area; `?screenshot=settings` → settings open.
+  useEffect(() => {
+    const mode = new URLSearchParams(location.search).get("screenshot");
+    if (mode === null) return;
+    isRunning.value = true;
+    if (mode === "settings") {
+      settingsOpen.value = true;
+    }
+  }, []);
+
   useEffect(() => {
     // Initialize theremin engine
     engineRef.current = new ThereminEngine(videoRef.current, {
