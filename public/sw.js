@@ -1,16 +1,12 @@
-const CACHE_NAME = "theremin-v1";
-const urlsToCache = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-];
+// Bump CACHE_NAME on every release that changes precached files so the
+// activate handler can purge the stale cache.
+const CACHE_NAME = "theremin-v2";
+const urlsToCache = ["/", "/index.html", "/manifest.json"];
 
 // Install event - cache initial resources
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
   );
   self.skipWaiting();
 });
@@ -18,39 +14,61 @@ self.addEventListener("install", (event) => {
 // Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    )
   );
   self.clients.claim();
 });
 
-// Fetch event - cache-first for everything
+// Fetch strategy:
+// - Navigations / HTML: network-first so a new deploy is picked up immediately,
+//   falling back to cache when offline.
+// - Other GET requests (hashed JS/CSS, model, wasm): cache-first for speed and
+//   offline support; hashed filenames make stale responses a non-issue.
 self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cached version if available
-      if (response) {
-        return response;
-      }
-      // Otherwise fetch from network and cache it
-      return fetch(event.request).then((response) => {
-        // Only cache successful responses
-        if (!response || response.status !== 200 || response.type !== "basic") {
+  const { request } = event;
+
+  if (request.method !== "GET") return;
+
+  const isNavigation =
+    request.mode === "navigate" ||
+    (request.headers.get("accept") || "").includes("text/html");
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          cachePut(request, response);
           return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match("/"))
+        )
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((response) => {
+        cachePut(request, response);
         return response;
       });
     })
   );
 });
+
+function cachePut(request, response) {
+  // Only cache complete, same-origin responses.
+  if (!response || response.status !== 200 || response.type !== "basic") {
+    return;
+  }
+  const copy = response.clone();
+  caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+}

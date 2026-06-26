@@ -9,20 +9,13 @@ import {
   ranges,
   effectiveValues,
 } from "../store";
-import {
-  clamp,
-  normalize,
-  lerp,
-  subtract,
-  normalizeVector,
-  dotProduct,
-  getExtrema,
-} from "./math-utils";
+import { clamp, normalize, lerp } from "./math-utils";
 
 const DEFAULT_STATUS_MESSAGE =
   "Lay your phone flat on the table.\nTouch the screen and allow camera access.\nHover your hand to play.";
+// Process every (FRAME_SKIP + 1)th camera frame. 1 => detect on every other
+// frame (~15fps on a 30fps stream) to save battery; set to 0 for full rate.
 const FRAME_SKIP = 1;
-const NATURAL_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const SCALE_DEFINITIONS = {
   chromatic: {
     label: "Chromatic (all notes)",
@@ -45,7 +38,6 @@ const SCALE_DEFINITIONS = {
     offsets: [0, 3, 5, 6, 7, 10],
   },
 };
-const INITIAL_AREA_RANGE = { min: 0.04, max: 0.24 };
 
 let visionFilesetPromise;
 
@@ -80,22 +72,24 @@ export class ThereminEngine {
 
   setupSynthEffects() {
     // Only setup effects for parameters NOT controlled by hand tracking
-    // (waveform and vibrato are not mappable to hands)
-    effect(() => {
-      const waveform = synthParams.waveform.value;
-      if (this.synth) {
-        this.synth.setWaveform(waveform);
-      }
-    });
-
-    effect(() => {
-      if (this.synth) {
-        this.synth.setVibrato(
-          synthParams.vibratoRate.value,
-          synthParams.vibratoDepth.value
-        );
-      }
-    });
+    // (waveform and vibrato are not mappable to hands).
+    // Disposers are torn down in cleanup() to avoid leaking subscriptions.
+    this.disposers = [
+      effect(() => {
+        const waveform = synthParams.waveform.value;
+        if (this.synth) {
+          this.synth.setWaveform(waveform);
+        }
+      }),
+      effect(() => {
+        if (this.synth) {
+          this.synth.setVibrato(
+            synthParams.vibratoRate.value,
+            synthParams.vibratoDepth.value
+          );
+        }
+      }),
+    ];
 
     // Note: Filter and volume are controlled via applyMappings,
     // which uses the knob values as fallback when mapping is "off"
@@ -170,11 +164,9 @@ export class ThereminEngine {
     if (width > height) {
       // Landscape: use horizontal (X) axis
       mappingSources.pitch.axis.value = "X";
-      console.log(`Camera is landscape (${width}x${height}), using Horizontal axis for pitch`);
     } else {
       // Portrait: use vertical (Y) axis
       mappingSources.pitch.axis.value = "Y";
-      console.log(`Camera is portrait (${width}x${height}), using Vertical axis for pitch`);
     }
   }
 
@@ -265,73 +257,19 @@ export class ThereminEngine {
       handedness,
     });
 
+    // computeMetrics extracts the farthest fingertip and updates the depth
+    // range once per hand; pointers are derived from the same metrics so we
+    // don't recompute the fingertip or double-feed the depth smoother.
     const metrics = computeMetrics({
       leftHand,
       rightHand,
       primaryHandLabel: this.primaryHandLabel,
     });
 
-    // Prepare pointer states for both hands
-    let pointerLeft = null;
-    let pointerRight = null;
-
-    // Left hand pointer
-    const farthestTipLeft = leftHand ? getFarthestFingertip(leftHand) : null;
-    if (farthestTipLeft) {
-      const displayX = 1 - farthestTipLeft.x; // mirror for UI
-      const tipZ = farthestTipLeft.z ?? 0;
-
-      // Normalize depth for visualization
-      updateDepthRange(tipZ);
-      const depthRange = ranges.depthRange;
-      let depthNormalized = 0;
-      if (
-        Number.isFinite(depthRange.min) &&
-        Number.isFinite(depthRange.max) &&
-        depthRange.max !== depthRange.min
-      ) {
-        depthNormalized = normalize(tipZ, depthRange.min, depthRange.max);
-      }
-      const distanceNormalized = clamp(1 - depthNormalized, 0, 1);
-
-      pointerLeft = {
-        x: displayX,
-        y: farthestTipLeft.y,
-        area: 0.5,
-        closeness: distanceNormalized,
-        visible: true,
-      };
-    }
-
-    // Right hand pointer
-    const farthestTipRight = rightHand ? getFarthestFingertip(rightHand) : null;
-    if (farthestTipRight) {
-      const displayX = 1 - farthestTipRight.x; // mirror for UI
-      const tipZ = farthestTipRight.z ?? 0;
-
-      // Normalize depth for visualization
-      updateDepthRange(tipZ);
-      const depthRange = ranges.depthRange;
-      let depthNormalized = 0;
-      if (
-        Number.isFinite(depthRange.min) &&
-        Number.isFinite(depthRange.max) &&
-        depthRange.max !== depthRange.min
-      ) {
-        depthNormalized = normalize(tipZ, depthRange.min, depthRange.max);
-      }
-      const distanceNormalized = clamp(1 - depthNormalized, 0, 1);
-
-      pointerRight = {
-        x: displayX,
-        y: farthestTipRight.y,
-        area: 0.5,
-        closeness: distanceNormalized,
-        visible: true,
-      };
-    }
-
-    this.updatePointer(pointerLeft, pointerRight);
+    this.updatePointer(
+      buildPointer(metrics, "left"),
+      buildPointer(metrics, "right")
+    );
 
     const outputs = applyMappings(metrics, this.synth);
 
@@ -445,6 +383,8 @@ export class ThereminEngine {
     this.running = false;
     this.cleanupStream();
     document.removeEventListener("visibilitychange", this.visibilityHandler);
+    this.disposers?.forEach((dispose) => dispose());
+    this.disposers = [];
     this.synth?.setActive(false);
     this.primaryHandLabel = null;
   }
@@ -476,12 +416,20 @@ async function loadVisionFileset() {
 }
 
 function resetRanges() {
-  ranges.areaRange.min = INITIAL_AREA_RANGE.min;
-  ranges.areaRange.max = INITIAL_AREA_RANGE.max;
   ranges.depthRange.min = Infinity;
   ranges.depthRange.max = -Infinity;
-  ranges.pinchRange.min = Infinity;
-  ranges.pinchRange.max = -Infinity;
+}
+
+function buildPointer(metrics, hand) {
+  const x = metrics[`${hand}Hand_tipX`];
+  if (x == null) return null;
+  return {
+    x,
+    y: metrics[`${hand}Hand_tipY`],
+    area: 0.5,
+    closeness: metrics[`${hand}Hand_tipZ`],
+    visible: true,
+  };
 }
 
 function computeMetrics({ leftHand, rightHand, primaryHandLabel }) {
@@ -544,16 +492,19 @@ function applyMappings(metrics, synth) {
   const noteName = quantized.noteName;
 
   const volumeSource = resolveMappingValue("volume", metrics, 1);
-  const volumeNormalized = clamp(volumeSource, 0, 1);
+  const rawVolumeNormalized = clamp(volumeSource, 0, 1);
+  // Mute below the threshold so the gap between hand and camera can silence
+  // the note (only meaningful when volume is mapped to a hand axis).
+  const muteThreshold = synthParams.muteThreshold.value;
+  const volumeNormalized =
+    rawVolumeNormalized <= muteThreshold ? 0 : rawVolumeNormalized;
   const volume = volumeNormalized * volumeMax;
 
-  // When mapped to hand, use hand value directly (0-1 range)
-  // When not mapped, use the knob value
-  const cutoffMapped = mappingSources.cutoff.hand.value !== "none";
+  // resolveMappingValue falls back to the knob value when the mapping is "off",
+  // so the hand-vs-knob choice is handled there.
   const cutoffSource = resolveMappingValue("cutoff", metrics, filterBase);
   const cutoffNormalized = clamp(cutoffSource, 0, 1);
 
-  const resonanceMapped = mappingSources.resonance.hand.value !== "none";
   const resonanceSource = resolveMappingValue("resonance", metrics, filterQ);
   const resonanceNormalized = clamp(resonanceSource, 0, 1);
   const resonanceQ = 0.5 + resonanceNormalized * 8.5;
@@ -752,11 +703,6 @@ function midiToFrequency(midi) {
 }
 
 function midiToNoteName(midi) {
-  const { name } = decomposeMidi(midi);
-  return name;
-}
-
-function decomposeMidi(midi) {
   const pitchClassNames = [
     "C",
     "C♯",
@@ -774,85 +720,7 @@ function decomposeMidi(midi) {
   const rounded = Math.round(midi);
   const pitchClass = ((rounded % 12) + 12) % 12;
   const octave = Math.floor(rounded / 12) - 1;
-  const base = pitchClassNames[pitchClass];
-  const name = `${base}${octave}`;
-  return {
-    name,
-    pitchClass,
-    base,
-    octave,
-    isNatural: NATURAL_PITCH_CLASSES.has(pitchClass),
-  };
-}
-
-function getPalmDepthMetric(landmarks) {
-  if (!landmarks?.length) return 0;
-  const wrist = landmarks[0];
-  const bases = [landmarks[5], landmarks[9], landmarks[13], landmarks[17]];
-  let sum = 0;
-  for (const joint of bases) {
-    const dx = joint.x - wrist.x;
-    const dy = joint.y - wrist.y;
-    sum += Math.hypot(dx, dy);
-  }
-  return bases.length ? sum / bases.length : 0;
-}
-
-function getPinchDistance(landmarks) {
-  const thumbTip = landmarks?.[4];
-  const indexTip = landmarks?.[8];
-  if (!thumbTip || !indexTip) return 0;
-  const dx = thumbTip.x - indexTip.x;
-  const dy = thumbTip.y - indexTip.y;
-  const dz = (thumbTip.z ?? 0) - (indexTip.z ?? 0);
-  return Math.hypot(dx, dy, dz);
-}
-
-function getHandSpanMetric(landmarks) {
-  const indexBase = landmarks?.[5];
-  const pinkyBase = landmarks?.[17];
-  if (!indexBase || !pinkyBase) return 0;
-  const dx = indexBase.x - pinkyBase.x;
-  const dy = indexBase.y - pinkyBase.y;
-  const dz = (indexBase.z ?? 0) - (pinkyBase.z ?? 0);
-  return Math.hypot(dx, dy, dz);
-}
-
-function normalizePinch(ratio) {
-  updatePinchRange(ratio);
-  const { min, max } = ranges.pinchRange;
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return 0;
-  const normalized = 1 - normalize(ratio, min, max);
-  return clamp(normalized, 0, 1);
-}
-
-function computeCurl(landmarks) {
-  if (!landmarks) return 0;
-  const fingers = [
-    { mcp: 5, pip: 6, tip: 8 },
-    { mcp: 9, pip: 10, tip: 12 },
-    { mcp: 13, pip: 14, tip: 16 },
-    { mcp: 17, pip: 18, tip: 20 },
-  ];
-  let sum = 0;
-  let count = 0;
-
-  for (const finger of fingers) {
-    const mcp = landmarks[finger.mcp];
-    const pip = landmarks[finger.pip];
-    const tip = landmarks[finger.tip];
-    if (!mcp || !pip || !tip) continue;
-
-    const v1 = normalizeVector(subtract(pip, mcp));
-    const v2 = normalizeVector(subtract(tip, pip));
-    const dot = clamp(dotProduct(v1, v2), -1, 1);
-    const extension = (dot + 1) / 2;
-    const curl = clamp(1 - extension, 0, 1);
-    sum += curl;
-    count += 1;
-  }
-
-  return count ? clamp(sum / count, 0, 1) : 0;
+  return `${pitchClassNames[pitchClass]}${octave}`;
 }
 
 function getFarthestFingertip(landmarks) {
@@ -887,23 +755,6 @@ function getFarthestFingertip(landmarks) {
   return farthestTip;
 }
 
-function updateAreaRange(sample) {
-  const smoothing = 0.05;
-  ranges.areaRange.min = lerp(
-    ranges.areaRange.min,
-    Math.min(ranges.areaRange.min, sample),
-    smoothing
-  );
-  ranges.areaRange.max = lerp(
-    ranges.areaRange.max,
-    Math.max(ranges.areaRange.max, sample),
-    smoothing
-  );
-  if (ranges.areaRange.max - ranges.areaRange.min < 0.02) {
-    ranges.areaRange.max = ranges.areaRange.min + 0.02;
-  }
-}
-
 function updateDepthRange(sample) {
   if (ranges.depthRangeLocked) return;
   const smoothing = 0.04;
@@ -924,29 +775,4 @@ function updateDepthRange(sample) {
   }
 }
 
-function updatePinchRange(sample) {
-  const smoothing = 0.12;
-  const minSample = Math.min(ranges.pinchRange.min, sample);
-  const maxSample = Math.max(ranges.pinchRange.max, sample);
-  ranges.pinchRange.min = Number.isFinite(ranges.pinchRange.min)
-    ? lerp(ranges.pinchRange.min, minSample, smoothing)
-    : sample;
-  ranges.pinchRange.max = Number.isFinite(ranges.pinchRange.max)
-    ? lerp(ranges.pinchRange.max, maxSample, smoothing)
-    : sample;
-  if (
-    Number.isFinite(ranges.pinchRange.min) &&
-    Number.isFinite(ranges.pinchRange.max) &&
-    ranges.pinchRange.max - ranges.pinchRange.min < 0.01
-  ) {
-    ranges.pinchRange.max = ranges.pinchRange.min + 0.01;
-  }
-}
-
-export {
-  DEFAULT_STATUS_MESSAGE,
-  SCALE_DEFINITIONS,
-  frequencyToMidi,
-  midiToNoteName,
-  decomposeMidi,
-};
+export { DEFAULT_STATUS_MESSAGE };

@@ -63,19 +63,31 @@ export function App() {
       if ("wakeLock" in navigator && isRunning.value) {
         try {
           wakeLockRef.current = await navigator.wakeLock.request("screen");
-          console.log("Screen Wake Lock acquired");
         } catch (err) {
           console.warn("Failed to acquire wake lock:", err);
         }
       }
     };
 
+    // The browser releases the screen wake lock whenever the tab is hidden,
+    // so re-acquire it when we become visible again while still running.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isRunning.value) {
+        requestWakeLock();
+      }
+    };
+
     if (isRunning.value) {
       requestWakeLock();
+      document.addEventListener("visibilitychange", handleVisibility);
     } else if (wakeLockRef.current) {
       wakeLockRef.current.release();
       wakeLockRef.current = null;
     }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [isRunning.value]);
 
   const handleStart = async (event) => {

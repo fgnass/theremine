@@ -81,16 +81,42 @@ export function Knob({
     draggingRef.current = false;
   };
 
+  const stepBy = (deltaNorm) => {
+    const newNormalized = Math.min(1, Math.max(0, normalized + deltaNorm));
+    onChange(min + newNormalized * (max - min));
+  };
+
   // Handle wheel events
   const handleWheel = (e) => {
     e.preventDefault();
-    const delta = (e.deltaY > 0 ? -1 : 1) * 0.02;
-    const newNormalized = Math.min(1, Math.max(0, normalized + delta));
-    const newValue = min + newNormalized * (max - min);
-    onChange(newValue);
+    stepBy((e.deltaY > 0 ? -1 : 1) * 0.02);
+  };
+
+  // Keyboard support for the slider role (arrows adjust, Shift = coarse)
+  const handleKeyDown = (e) => {
+    switch (e.key) {
+      case "ArrowUp":
+      case "ArrowRight":
+        stepBy(e.shiftKey ? 0.1 : 0.02);
+        break;
+      case "ArrowDown":
+      case "ArrowLeft":
+        stepBy(e.shiftKey ? -0.1 : -0.02);
+        break;
+      case "Home":
+        onChange(min);
+        break;
+      case "End":
+        onChange(max);
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
   };
 
   const rotationDeg = getRotationDeg(normalized);
+  const ariaValue = Number(value.toFixed(2));
   return (
     <div class="knob-container">
       <div
@@ -101,7 +127,13 @@ export function Knob({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onWheel={handleWheel}
+        onKeyDown={handleKeyDown}
+        tabindex={0}
+        role="slider"
         aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={ariaValue}
       >
         <div class="knob__ticks">
           <svg class="knob__ticks-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
