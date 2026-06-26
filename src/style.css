@@ -44,6 +44,10 @@ body::before {
   background-size: 425px auto; /* half the 851px source — it's a 2x asset */
   background-repeat: repeat;
   mix-blend-mode: luminosity;
+  /* The fabric is much lighter than the gold base; at full strength luminosity
+     washes the colour out. Fade the overlay so #cdbd83 stays dominant and the
+     texture only adds the weave. */
+  opacity: 0.3;
   pointer-events: none;
   z-index: 0;
 }
