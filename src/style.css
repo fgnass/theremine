@@ -22,12 +22,30 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   background-color: #cdbd83;
   color: inherit;
   position: relative;
+  overscroll-behavior: none;
+}
+
+/* Texture overlay across the whole background, blended with the gold base. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("./texture.jpg");
+  background-size: 425px auto; /* half the 851px source — it's a 2x asset */
+  background-repeat: repeat;
+  mix-blend-mode: luminosity;
+  pointer-events: none;
+  z-index: 0;
 }
 
 #app {
