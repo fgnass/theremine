@@ -1,6 +1,7 @@
 import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
 import { effect } from "@preact/signals";
 import { ThereminSynth } from "./theremin-synth";
+import { getFarthestFingertip } from "./hand-overlay";
 import {
   synthParams,
   mappingSources,
@@ -8,11 +9,13 @@ import {
   scale,
   ranges,
   effectiveValues,
+  hadStoredSettings,
+  trackingFrame,
 } from "../store";
 import { clamp, normalize, lerp } from "./math-utils";
 
 const DEFAULT_STATUS_MESSAGE =
-  "Lay your phone flat on the table.\nTouch the screen and allow camera access.\nHover your hand to play.";
+  "Lay your phone flat on the table, or sit in front of your webcam.\nAllow camera access, then hover your hand to play.";
 // Process every (FRAME_SKIP + 1)th camera frame. 1 => detect on every other
 // frame (~15fps on a 30fps stream) to save battery; set to 0 for full rate.
 const FRAME_SKIP = 1;
@@ -157,6 +160,10 @@ export class ThereminEngine {
   }
 
   autoConfigurePitchAxis() {
+    // Returning users have a persisted (possibly hand-picked) pitch axis;
+    // don't overwrite it. Only auto-detect on a first-ever visit.
+    if (hadStoredSettings.value) return;
+
     const width = this.videoEl.videoWidth;
     const height = this.videoEl.videoHeight;
 
@@ -226,9 +233,17 @@ export class ThereminEngine {
     const results = this.handLandmarker.detectForVideo(this.videoEl, now);
     if (results.landmarks?.length) {
       this.noHandsFrameCount = 0; // Reset counter when hands detected
+      // Publish raw landmarks for the camera preview overlay.
+      trackingFrame.value = {
+        landmarks: results.landmarks,
+        handedness: results.handedness ?? [],
+      };
       this.handleHands(results.landmarks, results.handedness);
     } else {
       this.noHandsFrameCount++;
+      if (trackingFrame.value.landmarks.length) {
+        trackingFrame.value = { landmarks: [], handedness: [] };
+      }
       this.handleNoHand();
     }
 
@@ -516,6 +531,7 @@ function applyMappings(metrics, synth) {
   synth.setVibrato(vibratoRate, vibratoDepth);
 
   // Update effective values for visual feedback
+  effectiveValues.pitch.value = pitchValue;
   effectiveValues.volume.value = volumeNormalized;
   effectiveValues.cutoff.value = cutoffNormalized;
   effectiveValues.resonance.value = resonanceNormalized;
@@ -721,38 +737,6 @@ function midiToNoteName(midi) {
   const pitchClass = ((rounded % 12) + 12) % 12;
   const octave = Math.floor(rounded / 12) - 1;
   return `${pitchClassNames[pitchClass]}${octave}`;
-}
-
-function getFarthestFingertip(landmarks) {
-  if (!landmarks) return null;
-
-  const wrist = landmarks[0];
-  if (!wrist) return null;
-
-  const fingertips = [
-    landmarks[4],
-    landmarks[8],
-    landmarks[12],
-    landmarks[16],
-    landmarks[20],
-  ];
-
-  let maxDistance = -1;
-  let farthestTip = null;
-
-  for (const tip of fingertips) {
-    if (!tip) continue;
-    const dx = tip.x - wrist.x;
-    const dy = tip.y - wrist.y;
-    const dz = (tip.z ?? 0) - (wrist.z ?? 0);
-    const distance = Math.hypot(dx, dy, dz);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      farthestTip = tip;
-    }
-  }
-
-  return farthestTip;
 }
 
 function updateDepthRange(sample) {

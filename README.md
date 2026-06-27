@@ -8,9 +8,9 @@ Wave your hand over your phone's camera to play. No instrument, no MIDI controll
 
 ## How it works
 
-Theremine uses [MediaPipe](https://developers.google.com/mediapipe) hand tracking to detect the position, orientation, and pinch of your hand(s) in the camera feed. Those movements are mapped onto synthesizer parameters in real time and rendered with the Web Audio API — no audio ever leaves your device.
+Theremine uses [MediaPipe](https://developers.google.com/mediapipe) hand tracking to follow the position of your hand(s) in the camera feed across three axes — horizontal, vertical, and distance from the camera. Those movements are mapped onto synthesizer parameters in real time and rendered with the Web Audio API — no audio ever leaves your device.
 
-The classic setup: lay your phone flat on the table, allow camera access, and hover your hand above it. By default, horizontal hand position controls pitch and the distance from the camera controls other parameters.
+The classic setup: lay your phone flat on the table, allow camera access, and hover your hand above it. By default, hand position controls pitch; you can map volume, filter cutoff, and resonance to a hand and axis of your choice in the settings.
 
 ## Features
 

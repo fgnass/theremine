@@ -1,0 +1,85 @@
+.camera-modal {
+  /* Stack above the settings modal it was opened from. */
+  z-index: 20;
+}
+
+/* The button inside Settings that opens this modal. */
+.settings-camera-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.7rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(36, 29, 11, 0.2);
+  background: rgba(255, 255, 255, 0.55);
+  color: rgba(36, 29, 11, 0.86);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.settings-camera-button:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.settings-camera-button:active {
+  transform: scale(0.99);
+}
+
+.settings-camera-button svg {
+  flex-shrink: 0;
+}
+
+.camera-modal__body {
+  padding: 1.2rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.camera-modal__stage {
+  width: 100%;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background: rgba(36, 29, 11, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(36, 29, 11, 0.2);
+  /* Reserve space before the first frame paints so the dialog doesn't jump. */
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-modal__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-modal__status {
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(36, 29, 11, 0.9);
+}
+
+.camera-modal__hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(36, 29, 11, 0.6);
+}
+
+@media (max-width: 480px) {
+  .camera-modal__body {
+    padding: 1rem 1.2rem;
+  }
+}

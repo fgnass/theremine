@@ -2,7 +2,7 @@ import { Knob } from "./Knob";
 import { synthParams, mappingSources, effectiveValues } from "../store";
 import "./LiveControls.css";
 import { WaveformKnob } from "./WaveformKnob";
-import { currentNote } from "../state/appState";
+import { NoteDial } from "./NoteDial";
 
 export function LiveControls() {
   // Determine which values to show based on mapping
@@ -42,8 +42,8 @@ export function LiveControls() {
         max={1}
         onChange={(v) => (synthParams.filterQ.value = v)}
       />
-      <div class="live-controls__current-note" role="status" aria-live="polite">
-        {currentNote.value}
+      <div class="live-controls__readout">
+        <NoteDial />
       </div>
     </div>
   );

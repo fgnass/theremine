@@ -1,4 +1,5 @@
-export function Instructions({ status, onStart, disabled }) {
+export function Instructions({ status, onStart, disabled, failed }) {
+  const label = disabled ? "Starting…" : failed ? "Try again" : "Tap to start";
   return (
     <section class="theremin__content">
       <div class="theremin__instructions">
@@ -9,7 +10,7 @@ export function Instructions({ status, onStart, disabled }) {
           disabled={disabled}
           type="button"
         >
-          Tap to start
+          {label}
         </button>
       </div>
     </section>

@@ -1,6 +1,8 @@
 import { useEffect } from "preact/hooks";
 import { mappingSources, mappingInvert, scale } from "../store";
+import { cameraModalOpen } from "../state/appState";
 import { ControlPanel } from "./ControlPanel";
+import { PresetField } from "./PresetField";
 
 const SCALES = [
   { value: "chromatic", label: "Chromatic (all notes)" },
@@ -129,6 +131,22 @@ export function SettingsModal({ open, onClose }) {
         </header>
 
         <div class="mapping-modal__body">
+          <button
+            type="button"
+            class="settings-camera-button"
+            onClick={() => (cameraModalOpen.value = true)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+              <circle cx="12" cy="13" r="3"/>
+            </svg>
+            <span>Camera &amp; tracking</span>
+          </button>
+
+          <div class="mapping-modal__divider" />
+
+          <PresetField />
+
           <div class="mapping-field">
             <span class="mapping-field__label">Scale</span>
             <select

@@ -26,11 +26,11 @@
 }
 
 .waveform-knob__icons {
+  /* Overflow the knob body so the glyphs sit in a halo around it rather than
+     overlapping the dark body. viewBox stays 0-100, so it scales with this box. */
   position: absolute;
-  inset: 0;
+  inset: -13px;
   pointer-events: none;
-  width: 100%;
-  height: 100%;
 }
 
 .waveform-knob__icon path {
@@ -85,11 +85,13 @@
 }
 
 .waveform-knob__label {
-  margin-top: 0.6rem;
   font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-primary, #1a1a1a);
+  font-weight: 600;
+  /* Match the letterpressed look of the other knob labels. */
+  color: rgba(43, 34, 12, 0.88);
   text-align: center;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(255, 247, 216, 0.5);
 }
 
 .waveform-knob__interactive:hover .waveform-knob__body {

@@ -30,7 +30,7 @@ const OPTIONS = [
 
 const START_DEG = -150;
 const ICON_RADIUS = 42; // expressed in svg viewBox units (0-100)
-const ICON_SIZE = 11; // final icon size in viewBox units
+const ICON_SIZE = 9; // final icon size in viewBox units
 const ICON_BASE_SCALE = ICON_SIZE / 32; // original icons are 32x32
 
 export function WaveformKnob({ value, onChange, label }) {

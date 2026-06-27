@@ -3,19 +3,19 @@ import { Header } from "./components/Header";
 import { Instructions } from "./components/Instructions";
 import { PlayArea } from "./components/PlayArea";
 import { SettingsModal } from "./components/SettingsModal";
+import { CameraModal } from "./components/CameraModal";
 import { HandPointer } from "./components/HandPointer";
-import {
-  ThereminEngine,
-  DEFAULT_STATUS_MESSAGE,
-} from "./lib/theremin-engine";
+import { ThereminEngine } from "./lib/theremin-engine";
 import "./style.css";
 import {
   isRunning,
   isStarting,
+  startFailed,
   statusMessage,
   currentNote,
   currentFrequency,
   settingsOpen,
+  cameraModalOpen,
   pointerState,
   pointerState2,
 } from "./state/appState";
@@ -32,6 +32,12 @@ export function App() {
     const mode = new URLSearchParams(location.search).get("screenshot");
     if (mode === null) return;
     isRunning.value = true;
+    // Show the note dial lit rather than idle in portfolio shots. `playoff`
+    // leaves it dark, for checking the powered-off state.
+    if (mode !== "playoff") {
+      currentFrequency.value = 440;
+      currentNote.value = "A4";
+    }
     if (mode === "settings") {
       settingsOpen.value = true;
     }
@@ -109,6 +115,7 @@ export function App() {
     if (isRunning.value || isStarting.value) return;
 
     isStarting.value = true;
+    startFailed.value = false;
 
     try {
       await engineRef.current.start();
@@ -116,7 +123,8 @@ export function App() {
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : String(error);
-      statusMessage.value = `Unable to access camera: ${message}\n\n${DEFAULT_STATUS_MESSAGE}`;
+      startFailed.value = true;
+      statusMessage.value = `Couldn't access the camera: ${message}\n\nCheck that no other app is using the camera and that this site is allowed to use it, then try again.`;
     } finally {
       isStarting.value = false;
     }
@@ -142,6 +150,7 @@ export function App() {
           status={statusMessage.value}
           onStart={handleStart}
           disabled={isStarting.value}
+          failed={startFailed.value}
         />
       )}
 
@@ -150,6 +159,11 @@ export function App() {
       <SettingsModal
         open={settingsOpen.value}
         onClose={() => (settingsOpen.value = false)}
+      />
+
+      <CameraModal
+        open={cameraModalOpen.value}
+        onClose={() => (cameraModalOpen.value = false)}
       />
 
       <HandPointer state={pointerState.value} />

@@ -85,7 +85,17 @@ body::before {
 }
 
 .theremin__video {
-  display: none;
+  /* Kept in the render tree (not display:none) so the camera preview can
+     drawImage() its frames reliably on iOS Safari, but visually hidden. The
+     decoded frames stay at full resolution regardless of this 1px size. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .theremin__header {
@@ -106,6 +116,11 @@ body::before {
 .theremin__logo {
   width: 140px;
   height: auto;
+  /* Raised/embossed: lit top edge, shadow along the bottom, so it stands proud
+     of the fabric (the inverse of the debossed labels). */
+  filter:
+    drop-shadow(0 -1px 0 rgba(255, 248, 222, 0.28))
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32));
 }
 
 .theremin__tagline {
@@ -113,6 +128,8 @@ body::before {
   font-size: 0.75rem;
   color: rgba(36, 29, 11, 0.6);
   font-weight: 500;
+  /* Same letterpress lift as the knob labels. */
+  text-shadow: 0 1px 0 rgba(255, 247, 216, 0.45);
 }
 
 .settings-button {
@@ -133,6 +150,8 @@ body::before {
 .settings-button svg {
   width: 24px;
   height: 24px;
+  /* Debossed into the fabric, matching the knob labels. */
+  filter: drop-shadow(0 1px 0 rgba(255, 247, 216, 0.5));
 }
 
 .settings-button:hover {
@@ -551,7 +570,113 @@ body::before {
 .mapping-modal__divider {
   height: 1px;
   background: rgba(36, 29, 11, 0.15);
-  margin: 1.5rem 0;
+  margin: 0.4rem 0;
+}
+
+/* Presets */
+.preset-field__select {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  padding-right: 2.4rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(36, 29, 11, 0.18);
+  background-color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 0.95rem;
+  color: rgba(36, 29, 11, 0.84);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%235b4f2a' d='M0 0l5 6 5-6H0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 0.65rem 0.4rem;
+  min-height: 44px;
+}
+
+.preset-field__save {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+
+.preset-field__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(36, 29, 11, 0.18);
+  background-color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 0.95rem;
+  color: rgba(36, 29, 11, 0.84);
+  min-height: 44px;
+}
+
+.preset-field__input:focus {
+  outline: none;
+  border-color: rgba(36, 29, 11, 0.38);
+  box-shadow: 0 0 0 3px rgba(36, 29, 11, 0.16);
+}
+
+.preset-field__save-button {
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0 1.2rem;
+  background: rgba(36, 29, 11, 0.82);
+  color: #fdf7df;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.preset-field__save-button:active {
+  transform: scale(0.97);
+}
+
+.preset-field__save-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.preset-field__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+}
+
+.preset-field__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(36, 29, 11, 0.1);
+  font-size: 0.85rem;
+  color: rgba(36, 29, 11, 0.82);
+}
+
+.preset-field__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(36, 29, 11, 0.6);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.preset-field__delete:hover {
+  background: rgba(36, 29, 11, 0.16);
+  color: rgba(36, 29, 11, 0.95);
 }
 
 html.modal-open,

@@ -1,0 +1,173 @@
+.note-dial {
+  --dial-w: 280px;
+  --dial-h: 72px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Beveled bronze bezel — a slightly larger gradient-filled frame the dark
+   window is recessed into, matching the knobs' metal. Lit from the top, darker
+   at the rim; no outer drop shadow so it reads as embedded in the fabric. */
+.note-dial__bezel {
+  padding: 5px;
+  border-radius: 0.95rem;
+  background: radial-gradient(
+    125% 135% at 50% -10%,
+    var(--gold-1) 0%,
+    var(--gold-2) 22%,
+    var(--gold-3) 52%,
+    var(--gold-4) 80%,
+    #5e4212 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 248, 220, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* The recessed window the drum spins behind. */
+.note-dial__viewport {
+  position: relative;
+  width: var(--dial-w);
+  height: var(--dial-h);
+  overflow: hidden;
+  border-radius: 0.62rem;
+  perspective: 600px;
+  /* Dark recess (echoes the knob bodies) sunk into the bronze bezel. */
+  background: radial-gradient(120% 140% at 50% 20%, #2c2c2c, #0d0d0d 70%, #000 100%);
+  box-shadow:
+    inset 0 3px 9px rgba(0, 0, 0, 0.95),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.note-dial__drum {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* transform set per-frame from JS */
+}
+
+.note-dial__note {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  margin: 0;
+  text-align: center;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* Unlit by default; the light comes on while a note is sounding. */
+  color: rgba(150, 120, 62, 0.4);
+  backface-visibility: hidden;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+  /* transform set inline (position on the cylinder) */
+}
+
+.note-dial--playing .note-dial__note {
+  color: var(--gold-1);
+  text-shadow: 0 0 7px rgba(255, 210, 120, 0.55), 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Left/right shadow so notes melt into the dark as the drum curves away. */
+.note-dial__fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(8, 8, 8, 0.98) 0%,
+    rgba(8, 8, 8, 0) 26%,
+    rgba(8, 8, 8, 0) 74%,
+    rgba(8, 8, 8, 0.98) 100%
+  );
+}
+
+/* Glass sheen across the top of the window. */
+.note-dial__glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 18%,
+    rgba(255, 255, 255, 0) 42%
+  );
+}
+
+/* Warm "lit" glow behind the centered note (brightens only, via screen blend). */
+.note-dial__center {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 64px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    60% 80% at 50% 50%,
+    rgba(255, 180, 90, 0.5) 0%,
+    rgba(255, 180, 90, 0) 70%
+  );
+  /* The glow only burns when a note is sounding. */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.note-dial--playing .note-dial__center {
+  opacity: 1;
+}
+
+/* Fixed center markers framing the current note (top + bottom triangles). */
+.note-dial__pointer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.note-dial__pointer::before,
+.note-dial__pointer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  filter: drop-shadow(0 0 3px rgba(255, 130, 90, 0.8));
+}
+.note-dial__pointer::before {
+  top: 3px;
+  border-top: 7px solid rgba(255, 140, 95, 0.95);
+}
+.note-dial__pointer::after {
+  bottom: 3px;
+  border-bottom: 7px solid rgba(255, 140, 95, 0.95);
+}
+
+/* Pointer markers are lit alongside the notes. */
+.note-dial__pointer {
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
+}
+.note-dial--playing .note-dial__pointer {
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .note-dial {
+    --dial-w: 230px;
+    --dial-h: 64px;
+  }
+  .note-dial__note {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .note-dial {
+    --dial-w: 200px;
+  }
+}
